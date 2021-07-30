@@ -1,0 +1,65 @@
+--- /content/alphafold_ori/model/modules.py	2021-07-30 21:10:20.134047450 +0000
++++ /content/alphafold/model/modules.py	2021-07-30 21:32:43.635957587 +0000
+@@ -311,12 +311,12 @@
+ 
+     def get_prev(ret):
+       new_prev = {
+-          'prev_pos':
+-              ret['structure_module']['final_atom_positions'],
++          'prev_pos': ret['structure_module']['final_atom_positions'],
+           'prev_msa_first_row': ret['representations']['msa_first_row'],
+           'prev_pair': ret['representations']['pair'],
++          'prev_lddt': ret['predicted_lddt']['logits'],
+       }
+-      return jax.tree_map(jax.lax.stop_gradient, new_prev)
++      return new_prev
+ 
+     def do_call(prev,
+                 recycle_idx,
+@@ -350,6 +350,7 @@
+               [num_residues, emb_config.msa_channel]),
+           'prev_pair': jnp.zeros(
+               [num_residues, num_residues, emb_config.pair_channel]),
++          'prev_lddt': jnp.zeros([num_residues, 50]),
+       }
+ 
+       if 'num_iter_recycling' in batch:
+@@ -365,21 +366,19 @@
+         # Eval mode or tests: use the maximum number of iterations.
+         num_iter = self.config.num_recycle
+ 
+-      body = lambda x: (x[0] + 1,  # pylint: disable=g-long-lambda
+-                        get_prev(do_call(x[1], recycle_idx=x[0],
+-                                         compute_loss=False)))
++      #################################################################
++      def body(p,i):
++        p = get_prev(do_call(p, recycle_idx=i, compute_loss=False))
++        return p, p
+       if hk.running_init():
+-        # When initializing the Haiku module, run one iteration of the
+-        # while_loop to initialize the Haiku modules used in `body`.
+-        _, prev = body((0, prev))
++        prev, prev_prev = body(prev, 0)
+       else:
+-        _, prev = hk.while_loop(
+-            lambda x: x[0] < num_iter,
+-            body,
+-            (0, prev))
++        prev, prev_prev = hk.scan(body, prev, jnp.arange(num_iter))
++      #################################################################
+     else:
+       prev = {}
+       num_iter = 0
++      prev_prev = None
+ 
+     ret = do_call(prev=prev, recycle_idx=num_iter)
+     if compute_loss:
+@@ -387,7 +386,7 @@
+ 
+     if not return_representations:
+       del (ret[0] if compute_loss else ret)['representations']  # pytype: disable=unsupported-operands
+-    return ret
++    return ret, prev_prev
+ 
+ 
+ class TemplatePairStack(hk.Module):
