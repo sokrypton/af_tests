@@ -9,7 +9,7 @@
 +          'prev_pos': ret['structure_module']['final_atom_positions'],
            'prev_msa_first_row': ret['representations']['msa_first_row'],
            'prev_pair': ret['representations']['pair'],
-+          'prev_lddt': ret['predicted_lddt']['logits'],
++          'prev_predicted_lddt': ret['predicted_lddt']['logits'],
        }
 -      return jax.tree_map(jax.lax.stop_gradient, new_prev)
 +      return new_prev
@@ -20,7 +20,7 @@
                [num_residues, emb_config.msa_channel]),
            'prev_pair': jnp.zeros(
                [num_residues, num_residues, emb_config.pair_channel]),
-+          'prev_lddt': jnp.zeros([num_residues, 50]),
++          'prev_predicted_lddt': jnp.zeros([num_residues, 50]),
        }
  
        if 'num_iter_recycling' in batch:
