@@ -1,0 +1,29 @@
+--- /content/alphafold_ori/model/model.py	2021-07-30 21:10:20.134047450 +0000
++++ /content/alphafold/model/model.py	2021-07-30 21:32:56.794092431 +0000
+@@ -60,7 +60,8 @@
+           batch,
+           is_training=False,
+           compute_loss=False,
+-          ensemble_representations=True)
++          ensemble_representations=False,
++          return_representations=True)
+ 
+     self.apply = jax.jit(hk.transform(_forward_fn).apply)
+     self.init = jax.jit(hk.transform(_forward_fn).init)
+@@ -130,12 +131,10 @@
+     self.init_params(feat)
+     logging.info('Running predict with shape(feat) = %s',
+                  tree.map_structure(lambda x: x.shape, feat))
+-    result = self.apply(self.params, jax.random.PRNGKey(0), feat)
+-    # This block is to ensure benchmark timings are accurate. Some blocking is
+-    # already happening when computing get_confidence_metrics, and this ensures
+-    # all outputs are blocked on.
+-    jax.tree_map(lambda x: x.block_until_ready(), result)
++    result, result_prev = self.apply(self.params, jax.random.PRNGKey(0), feat)
+     result.update(get_confidence_metrics(result))
++    if result_prev is not None:
++      result_prev.update({"prev_plddt":confidence.compute_plddt(result_prev["prev_lddt"])})
+     logging.info('Output shape was %s',
+                  tree.map_structure(lambda x: x.shape, result))
+-    return result
++    return result, result_prev
