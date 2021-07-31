@@ -1,6 +1,48 @@
---- /content/alphafold_ori/model/modules.py	2021-07-30 21:10:20.134047450 +0000
-+++ /content/alphafold/model/modules.py	2021-07-30 21:32:43.635957587 +0000
-@@ -311,12 +311,12 @@
+--- /content/alphafold_ori/model/modules.py	2021-07-31 00:21:26.673631449 +0000
++++ /content/alphafold/model/modules.py	2021-07-31 00:51:31.968111380 +0000
+@@ -167,7 +167,8 @@
+ 
+     # Average the representations (except MSA) over the batch dimension.
+     if ensemble_representations:
+-      def body(x):
++
++      def body(current_representations,i):
+         """Add one element to the representations ensemble."""
+         i, current_representations = x
+         feats = slice_batch(i)
+@@ -178,18 +179,15 @@
+         for k in current_representations:
+           new_representations[k] = (
+               current_representations[k] + representations_update[k])
+-        return i+1, new_representations
++        return new_representations, None
+ 
+       if hk.running_init():
+         # When initializing the Haiku module, run one iteration of the
+         # while_loop to initialize the Haiku modules used in `body`.
+-        _, representations = body((1, representations))
++        representations, _ = body(representations,1)
+       else:
+-        _, representations = hk.while_loop(
+-            lambda x: x[0] < num_ensemble,
+-            body,
+-            (1, representations))
+-
++        representations, _ = hk.scan(body, representations, jnp.arange(1,num_ensemble+1))
++      
+       for k in representations:
+         if k != 'msa':
+           representations[k] /= num_ensemble.astype(representations[k].dtype)
+@@ -283,7 +281,7 @@
+       batch,
+       is_training,
+       compute_loss=False,
+-      ensemble_representations=False,
++      ensemble_representations=True,
+       return_representations=False):
+     """Run the AlphaFold model.
+ 
+@@ -311,12 +309,12 @@
  
      def get_prev(ret):
        new_prev = {
@@ -16,7 +58,7 @@
  
      def do_call(prev,
                  recycle_idx,
-@@ -350,6 +350,7 @@
+@@ -350,6 +348,7 @@
                [num_residues, emb_config.msa_channel]),
            'prev_pair': jnp.zeros(
                [num_residues, num_residues, emb_config.pair_channel]),
@@ -24,14 +66,13 @@
        }
  
        if 'num_iter_recycling' in batch:
-@@ -365,21 +366,19 @@
+@@ -365,21 +364,18 @@
          # Eval mode or tests: use the maximum number of iterations.
          num_iter = self.config.num_recycle
  
 -      body = lambda x: (x[0] + 1,  # pylint: disable=g-long-lambda
 -                        get_prev(do_call(x[1], recycle_idx=x[0],
 -                                         compute_loss=False)))
-+      #################################################################
 +      def body(p,i):
 +        p = get_prev(do_call(p, recycle_idx=i, compute_loss=False))
 +        return p, p
@@ -46,7 +87,7 @@
 -            body,
 -            (0, prev))
 +        prev, prev_prev = hk.scan(body, prev, jnp.arange(num_iter))
-+      #################################################################
++
      else:
        prev = {}
        num_iter = 0
@@ -54,7 +95,7 @@
  
      ret = do_call(prev=prev, recycle_idx=num_iter)
      if compute_loss:
-@@ -387,7 +386,7 @@
+@@ -387,7 +383,7 @@
  
      if not return_representations:
        del (ret[0] if compute_loss else ret)['representations']  # pytype: disable=unsupported-operands
