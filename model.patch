@@ -1,5 +1,5 @@
---- /content/alphafold_ori/model/model.py	2021-07-30 21:10:20.134047450 +0000
-+++ /content/alphafold/model/model.py	2021-07-30 21:32:56.794092431 +0000
+--- /content/alphafold_ori/model/model.py	2021-07-31 00:21:26.673631449 +0000
++++ /content/alphafold/model/model.py	2021-07-31 00:21:27.383696577 +0000
 @@ -60,7 +60,8 @@
            batch,
            is_training=False,
