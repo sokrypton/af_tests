@@ -22,7 +22,7 @@
 +    result, result_prev = self.apply(self.params, jax.random.PRNGKey(0), feat)
      result.update(get_confidence_metrics(result))
 +    if result_prev is not None:
-+      result_prev.update({"prev_plddt":confidence.compute_plddt(result_prev["prev_lddt"])})
++      result_prev.update({"prev_plddt":confidence.compute_plddt(result_prev["prev_predicted_lddt"])})
      logging.info('Output shape was %s',
                   tree.map_structure(lambda x: x.shape, result))
 -    return result
